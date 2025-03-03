@@ -1,4 +1,11 @@
-let currentTopic = null;
+const config = {
+  artifactId: 2684317095,
+  pagesBuildVersion: "7be2261fe1099c0c789fb885a0f26c42a8184732",
+  oidcToken: "***"
+};
+
+let currentTopic = null; 
+
 let currentUser  = null;
 let db;
 
