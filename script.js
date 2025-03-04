@@ -1,11 +1,4 @@
-const config = {
-  artifactId: 2684317095,
-  pagesBuildVersion: "7be2261fe1099c0c789fb885a0f26c42a8184732",
-  oidcToken: "***"
-};
-
-let currentTopic = null; 
-
+let currentTopic = null;
 let currentUser  = null;
 let db;
 
@@ -172,8 +165,7 @@ const addGoal = () => {
     text: goalText,
     description: goalDescription,
     progress: goalProgress,
-    completed: false,
-    createdBy: currentUser  // Add this line
+    completed: false
   }).onsuccess = () => {
     renderGoals();
     resetGoalInputs();
@@ -192,7 +184,8 @@ const renderGoals = () => {
 
   const transaction = db.transaction(['goals'], 'readonly');
   const store = transaction.objectStore('goals');
-  store.getAll().onsuccess = (event) => {
+  const index = store.index('topicName');
+  index.getAll(currentTopic).onsuccess = (event) => {
     const goals = event.target.result;
     goals.forEach((goal) => {
       const goalRow = document.createElement('tr');
@@ -201,7 +194,6 @@ const renderGoals = () => {
         <td>${goal.text}</td>
         <td>${goal.description}</td>
         <td>${goal.progress}%</td>
-        <td>Создано пользователем: ${goal.createdBy}</td>  // Add this line
         <td>
           <button onclick="toggleGoal(${goal.id})">${goal.completed ? 'Восстановить' : 'Закрыть'}</button>
           <button onclick="deleteGoal(${goal.id})">Удалить</button>
