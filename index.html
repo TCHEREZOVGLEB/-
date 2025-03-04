@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Трекер целей</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -26,24 +27,6 @@
       </div>
     </div>
 
-    <!-- Страница регистрации -->
-    <div id="registerPage" class="register-page hidden">
-      <h1>Регистрация</h1>
-      <input type="text" id="regUsername" placeholder="Имя пользователя" required>
-      <input type="password" id="regPassword" placeholder="Пароль" required>
-      <select id="regRole" required>
-        <option value="" disabled selected>Выберите должность</option>
-        <option value="сержант">Сержант</option>
-        <option value="старший сержант">Старший сержант</option>
-        <option value="капитан">Капитан</option>
-        <option value="админ">Админ</option>
-      </select>
-      <button onclick="register()">Зарегистрироваться</button>
-      <div class="nav-buttons">
-        <button onclick="showAuthPage()">Назад к авторизации</button>
-      </div>
-    </div>
-
     <!-- Основная страница -->
     <div id="mainPage" class="main-page hidden">
       <h1>Трекер целей</h1>
@@ -51,6 +34,15 @@
       <button onclick="createTopic()">Перейти к целям</button>
       <button onclick="showShiftPage()">Отметить выход на смену</button>
       <button onclick="showProfilePage(currentUser )">Профиль</button>
+      
+      <h2>Выберите объект для отчета</h2>
+      <select id="reportObject">
+        <option value="" disabled selected>Выберите объект</option>
+        <option value="Южный парк">Южный парк</option>
+        <option value="Пирамида">Пирамида</option>
+        <option value="Хостел">Хостел</option>
+      </select>
+      <button onclick="showReport()">Показать отчет</button>
     </div>
 
     <!-- Страница целей -->
@@ -96,7 +88,6 @@
       <button onclick="saveShift()">Сохранить</button>
       <button onclick="clearShiftData()">Очистить данные</button>
       <button onclick="showMainPage()">Вернуться в меню</button>
-      <button onclick="exportShiftsToExcel()">Сохранить таблицу в Excel</button>
 
       <table class="shift-table">
         <thead>
@@ -108,25 +99,6 @@
         </thead>
         <tbody id="shiftList"></tbody>
       </table>
-    </div>
-
-    <!-- Страница отчета по сменам -->
-    <div id="shiftReportPage" class="shift-report-page hidden">
-      <h1>Отчет по сменам</h1>
-      <table class="shift-report-table">
-        <thead>
-          <tr>
-            <th>ФИО</th>
-            <th>Номер смены</th>
-            <th>Дата</th>
-          </tr>
-        </thead>
-        <tbody id="shiftReportList"></tbody>
-      </table>
-      <button onclick="exportToExcel()">Экспорт в Excel</button>
-      <div class="nav-buttons">
-        <button onclick="showMainPage()">На главную</button>
-      </div>
     </div>
 
     <!-- Страница профиля -->
