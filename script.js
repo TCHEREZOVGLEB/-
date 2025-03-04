@@ -1,129 +1,161 @@
-let currentUser = null;
-let currentTopic = null;
+const config = {
+  artifactId: 2684317095,
+  pagesBuildVersion: "7be2261fe1099c0c789fb885a0f26c42a8184732",
+  oidcToken: "***"
+};
 
-// Показать страницу авторизации
+let currentTopic = null; 
+
+let currentUser  = null;
+let db;
+
+const initDB = () => {
+  const request = indexedDB.open('GoalsTrackerDB', 4);
+
+  request.onupgradeneeded = (event) => {
+    db = event.target.result;
+    if (!db.objectStoreNames.contains('users')) {
+      db.createObjectStore('users', { keyPath: 'username' });
+    }
+    if (!db.objectStoreNames.contains('topics')) {
+      db.createObjectStore('topics', { keyPath: 'name' });
+    }
+    if (!db.objectStoreNames.contains('goals')) {
+      const goalsStore = db.createObjectStore('goals', { keyPath: 'id', autoIncrement: true });
+      goalsStore.createIndex('topicName', 'topicName', { unique: false });
+    }
+    if (!db.objectStoreNames.contains('shifts')) {
+      const shiftsStore = db.createObjectStore('shifts', { keyPath: 'id', autoIncrement: true });
+      shiftsStore.createIndex('fio', 'fio', { unique: false });
+    }
+  };
+
+  request.onsuccess = (event) => {
+    db = event.target.result;
+    showAuthPage(); // Показываем страницу авторизации по умолчанию
+  };
+
+  request.onerror = (event) => {
+    console.error('Ошибка при открытии базы данных:', event.target.error);
+  };
+};
+
 const showAuthPage = () => {
   hideAllPages();
   document.getElementById('authPage').classList.remove('hidden');
 };
 
-// Показать страницу регистрации
 const showRegisterPage = () => {
   hideAllPages();
   document.getElementById('registerPage').classList.remove('hidden');
 };
 
-// Показать основную страницу
 const showMainPage = () => {
   hideAllPages();
   document.getElementById('mainPage').classList.remove('hidden');
 };
 
-// Показать страницу целей
 const showTopicPage = (topicName) => {
   hideAllPages();
   document.getElementById('topicPage').classList.remove('hidden');
   document.getElementById('topicTitle').textContent = topicName;
-  currentTopic = topicName; // Обновляем текущую тему
   renderGoals();
 };
 
-// Показать страницу смен
 const showShiftPage = () => {
   hideAllPages();
   document.getElementById('shiftPage').classList.remove('hidden');
   renderShifts();
 };
 
-// Показать страницу профиля
+const showShiftReportPage = () => {
+  hideAllPages();
+  document.getElementById('shiftReportPage').classList.remove('hidden');
+  renderShiftReport();
+};
+
 const showProfilePage = (username) => {
   hideAllPages();
   document.getElementById('profilePage').classList.remove('hidden');
 
-  window.firebaseFunctions.getDoc(window.firebaseFunctions.doc(db, 'users', username)).then((doc) => {
-    if (doc.exists()) {
-      const user = doc.data();
-      document.getElementById('profileUsername').textContent = user.username;
-      document.getElementById('profileRole').textContent = user.role;
+  const transaction = db.transaction(['users'], 'readonly');
+  const store = transaction.objectStore('users');
+  store.get(username).onsuccess = (event) => {
+    const user = event.target.result;
+    document.getElementById('profileUsername').textContent = user.username;
+    document.getElementById('profileRole').textContent = user.role;
+
+    // Проверяем роль текущего пользователя
+    if (currentUser  && (user.role === 'капитан' || user.role === 'админ')) {
+      document.querySelector('#profilePage button:nth-child(1)').style.display = 'inline-block'; // Кнопка повышения
+      document.querySelector('#profilePage button:nth-child(2)').style.display = 'inline-block'; // Кнопка понижения
+    } else {
+      document.querySelector('#profilePage button:nth-child(1)').style.display = 'none'; // Скрыть кнопку повышения
+      document.querySelector('#profilePage button:nth-child(2)').style.display = 'none'; // Скрыть кнопку понижения
     }
-  });
+  };
 };
 
-// Скрыть все страницы
 const hideAllPages = () => {
   document.getElementById('authPage').classList.add('hidden');
   document.getElementById('registerPage').classList.add('hidden');
   document.getElementById('mainPage').classList.add('hidden');
   document.getElementById('topicPage').classList.add('hidden');
   document.getElementById('shiftPage').classList.add('hidden');
+  document.getElementById('shiftReportPage').classList.add('hidden');
   document.getElementById('profilePage').classList.add('hidden');
 };
 
-// Регистрация пользователя
-const register = async () => {
+const register = () => {
   const username = document.getElementById('regUsername').value.trim();
   const password = document.getElementById('regPassword').value.trim();
   const role = document.getElementById('regRole').value;
 
   if (!username || !password || !role) return alert('Заполните все поля!');
 
-  try {
-    await window.firebaseFunctions.setDoc(window.firebaseFunctions.doc(db, 'users', username), {
-      username,
-      password,
-      role
-    });
+  const transaction = db.transaction(['users'], 'readwrite');
+  const store = transaction.objectStore('users');
+  store.add({ username, password, role }).onsuccess = () => {
     alert('Регистрация успешна!');
-    showAuthPage();
-  } catch (error) {
-    alert('Ошибка при регистрации: ' + error.message);
-  }
+    showAuthPage(); // Переход на страницу авторизации после регистрации
+  };
+
+  transaction.onerror = () => {
+    alert('Пользователь уже существует!');
+  };
 };
 
-// Авторизация пользователя
-const login = async () => {
+const login = () => {
   const username = document.getElementById('loginUsername').value.trim();
   const password = document.getElementById('loginPassword').value.trim();
   const role = document.getElementById('loginRole').value;
 
   if (!username || !password || !role) return alert('Заполните все поля!');
 
-  try {
-    const userDoc = await window.firebaseFunctions.getDoc(window.firebaseFunctions.doc(db, 'users', username));
-    if (userDoc.exists()) {
-      const user = userDoc.data();
-      if (user.password === password && user.role === role) {
-        currentUser = username;
-        showMainPage();
-      } else {
-        alert('Неверное имя пользователя, пароль или должность!');
-      }
+  const transaction = db.transaction(['users'], 'readonly');
+  const store = transaction.objectStore('users');
+  store.get(username).onsuccess = (event) => {
+    const user = event.target.result;
+    if (user && user.password === password && user.role === role) {
+      currentUser  = username;
+      showMainPage(); // Переход на основную страницу после авторизации
     } else {
-      alert('Пользователь не найден!');
+      alert('Неверное имя пользователя, пароль или должность!');
     }
-  } catch (error) {
-    alert('Ошибка при авторизации: ' + error.message);
-  }
+  };
 };
 
-// Создание темы
-const createTopic = async () => {
+const createTopic = () => {
   const topicName = document.getElementById('topicName').value.trim();
   if (!topicName) return alert('Введите имя и фамилию!');
 
-  try {
-    await window.firebaseFunctions.addDoc(window.firebaseFunctions.collection(db, 'topics'), {
-      name: topicName,
-      user: currentUser
-    });
-    showTopicPage(topicName);
-  } catch (error) {
-    alert('Ошибка при создании темы: ' + error.message);
-  }
+  const transaction = db.transaction(['topics'], 'readwrite');
+  const store = transaction.objectStore('topics');
+  store.add({ name: topicName, user: currentUser  });
+  showTopicPage(topicName);
 };
 
-// Добавление цели
-const addGoal = async () => {
+const addGoal = () => {
   const goalText = document.getElementById('newGoal').value.trim();
   const goalDescription = document.getElementById('goalDescription').value.trim();
   const goalProgress = parseInt(document.getElementById('newGoalProgress').value, 10);
@@ -133,107 +165,99 @@ const addGoal = async () => {
     return alert('Введите процент выполнения от 0 до 100!');
   }
 
-  try {
-    await window.firebaseFunctions.addDoc(window.firebaseFunctions.collection(db, 'goals'), {
-      topicName: currentTopic,
-      text: goalText,
-      description: goalDescription,
-      progress: goalProgress,
-      completed: false,
-      createdBy: currentUser
-    });
+  const transaction = db.transaction(['goals'], 'readwrite');
+  const store = transaction.objectStore('goals');
+  store.add({
+    topicName: currentTopic,
+    text: goalText,
+    description: goalDescription,
+    progress: goalProgress,
+    completed: false,
+    createdBy: currentUser  // Add this line
+  }).onsuccess = () => {
     renderGoals();
     resetGoalInputs();
-  } catch (error) {
-    alert('Ошибка при добавлении цели: ' + error.message);
-  }
+  };
 };
 
-// Отображение целей
-const renderGoals = async () => {
+const resetGoalInputs = () => {
+  document.getElementById('newGoal').value = '';
+  document.getElementById('goalDescription').value = '';
+  document.getElementById('newGoalProgress').value = '';
+};
+
+const renderGoals = () => {
   const goalsList = document.getElementById('goalsList');
   goalsList.innerHTML = '';
 
-  try {
-    const querySnapshot = await window.firebaseFunctions.getDocs(window.firebaseFunctions.collection(db, 'goals'));
-    querySnapshot.forEach((doc) => {
-      const goal = doc.data();
-      if (goal.topicName === currentTopic) { // Фильтруем цели по текущей теме
-        const goalRow = document.createElement('tr');
-        goalRow.className = `goal ${goal.completed ? 'completed' : ''}`;
-        goalRow.innerHTML = `
-          <td>${goal.text}</td>
-          <td>${goal.description}</td>
-          <td>${goal.progress}%</td>
-          <td>Создано пользователем: ${goal.createdBy}</td>
-          <td>
-            <button onclick="toggleGoal('${doc.id}')">${goal.completed ? 'Восстановить' : 'Закрыть'}</button>
-            <button onclick="deleteGoal('${doc.id}')">Удалить</button>
-          </td>
-        `;
-        goalsList.appendChild(goalRow);
-      }
+  const transaction = db.transaction(['goals'], 'readonly');
+  const store = transaction.objectStore('goals');
+  store.getAll().onsuccess = (event) => {
+    const goals = event.target.result;
+    goals.forEach((goal) => {
+      const goalRow = document.createElement('tr');
+      goalRow.className = `goal ${goal.completed ? 'completed' : ''}`;
+      goalRow.innerHTML = `
+        <td>${goal.text}</td>
+        <td>${goal.description}</td>
+        <td>${goal.progress}%</td>
+        <td>Создано пользователем: ${goal.createdBy}</td>  // Add this line
+        <td>
+          <button onclick="toggleGoal(${goal.id})">${goal.completed ? 'Восстановить' : 'Закрыть'}</button>
+          <button onclick="deleteGoal(${goal.id})">Удалить</button>
+        </td>
+      `;
+      goalsList.appendChild(goalRow);
     });
-  } catch (error) {
-    alert('Ошибка при загрузке целей: ' + error.message);
-  }
+  };
 };
 
-// Переключение статуса цели
-const toggleGoal = async (id) => {
-  try {
-    const goalRef = window.firebaseFunctions.doc(db, 'goals', id);
-    const goalDoc = await window.firebaseFunctions.getDoc(goalRef);
-    const goal = goalDoc.data();
-    await window.firebaseFunctions.updateDoc(goalRef, {
-      completed: !goal.completed
-    });
-    renderGoals();
-  } catch (error) {
-    alert('Ошибка при обновлении цели: ' + error.message);
-  }
+const toggleGoal = (id) => {
+  const transaction = db.transaction(['goals'], 'readwrite');
+  const store = transaction.objectStore('goals');
+  store.get(id).onsuccess = (event) => {
+    const goal = event.target.result;
+    goal.completed = !goal.completed;
+    store.put(goal).onsuccess = renderGoals;
+  };
 };
 
-// Удаление цели
-const deleteGoal = async (id) => {
-  try {
-    await window.firebaseFunctions.deleteDoc(window.firebaseFunctions.doc(db, 'goals', id));
-    renderGoals();
-  } catch (error) {
-    alert('Ошибка при удалении цели: ' + error.message);
-  }
+const deleteGoal = (id) => {
+  const transaction = db.transaction(['goals'], 'readwrite');
+  const store = transaction.objectStore('goals');
+  store.delete(id).onsuccess = renderGoals;
 };
 
-// Сохранение смены
-const saveShift = async () => {
+const saveShift = () => {
   const fio = document.getElementById('shiftFIO').value.trim();
   const shiftNumber = document.getElementById('shiftNumber').value;
   const shiftDate = document.getElementById('shiftDate').value;
 
   if (!fio || !shiftNumber || !shiftDate) return alert('Заполните все поля!');
 
-  try {
-    await window.firebaseFunctions.addDoc(window.firebaseFunctions.collection(db, 'shifts'), {
-      fio,
-      shiftNumber,
-      shiftDate
-    });
+  const transaction = db.transaction(['shifts'], 'readwrite');
+  const store = transaction.objectStore('shifts');
+  store.add({ fio, shiftNumber, shiftDate }).onsuccess = () => {
     renderShifts();
     resetShiftInputs();
-  } catch (error) {
-    alert('Ошибка при сохранении смены: ' + error.message);
-  }
+  };
 };
 
-// Отображение смен
-const renderShifts = async () => {
+const resetShiftInputs = () => {
+  document.getElementById('shiftFIO').value = '';
+  document.getElementById('shiftNumber').value = '';
+  document.getElementById('shiftDate').value = '';
+};
+
+const renderShifts = () => {
   const shiftList = document.getElementById('shiftList');
   shiftList.innerHTML = '';
 
-  try {
-    const querySnapshot = await window.firebaseFunctions.getDocs(window.firebaseFunctions.collection(db, 'shifts'));
-    querySnapshot.forEach((doc) => {
-      const shift = doc.data();
+  const transaction = db.transaction(['shifts'], 'readonly');
+  const store = transaction.objectStore('shifts');
+  store.getAll().onsuccess = (event) => {
+    const shifts = event.target.result;
+    shifts.forEach((shift) => {
       const shiftRow = document.createElement('tr');
       shiftRow.innerHTML = `
         <td>${shift.fio}</td>
@@ -242,30 +266,59 @@ const renderShifts = async () => {
       `;
       shiftList.appendChild(shiftRow);
     });
-  } catch (error) {
-    alert('Ошибка при загрузке смен: ' + error.message);
-  }
+  };
 };
 
-// Очистка данных смен
-const clearShiftData = async () => {
-  try {
-    const querySnapshot = await window.firebaseFunctions.getDocs(window.firebaseFunctions.collection(db, 'shifts'));
-    querySnapshot.forEach(async (doc) => {
-      await window.firebaseFunctions.deleteDoc(window.firebaseFunctions.doc(db, 'shifts', doc.id));
+const renderShiftReport = () => {
+  const shiftReportList = document.getElementById('shiftReportList');
+  shiftReportList.innerHTML = '';
+
+  const transaction = db.transaction(['shifts'], 'readonly');
+  const store = transaction.objectStore('shifts');
+  store.getAll().onsuccess = (event) => {
+    const shifts = event.target.result;
+    shifts.forEach((shift) => {
+      const shiftRow = document.createElement('tr');
+      shiftRow.innerHTML = `
+        <td>${shift.fio}</td>
+        <td>${shift.shiftNumber}</td>
+        <td>${shift.shiftDate}</td>
+      `;
+      shiftReportList.appendChild(shiftRow);
     });
-    renderShifts();
-    alert('Данные успешно очищены!');
-  } catch (error) {
-    alert('Ошибка при очистке данных: ' + error.message);
-  }
+  };
 };
 
-// Экспорт смен в Excel
-const exportShiftsToExcel = async () => {
-  try {
-    const querySnapshot = await window.firebaseFunctions.getDocs(window.firebaseFunctions.collection(db, 'shifts'));
-    const shifts = querySnapshot.docs.map(doc => doc.data());
+const clearShiftData = () => {
+  const transaction = db.transaction(['shifts'], 'readwrite');
+  const store = transaction.objectStore('shifts');
+  store.clear().onsuccess = () => {
+    renderShifts(); // Обновляем отображение после очистки
+    alert('Данные успешно очищены!');
+  };
+};
+
+const exportToExcel = () => {
+  const transaction = db.transaction(['shifts'], 'readonly');
+  const store = transaction.objectStore('shifts');
+  store.getAll().onsuccess = (event) => {
+    const shifts = event.target.result;
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + shifts.map(shift => `${shift.fio},${shift.shiftNumber},${shift.shiftDate}`).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "shifts_report.csv");
+    document.body.appendChild(link);
+    link.click();
+  };
+};
+
+const exportShiftsToExcel = () => {
+  const transaction = db.transaction(['shifts'], 'readonly');
+  const store = transaction.objectStore('shifts');
+  store.getAll().onsuccess = (event) => {
+    const shifts = event.target.result;
 
     // Создаем CSV контент
     let csvContent = "data:text/csv;charset=utf-8,";
@@ -282,66 +335,55 @@ const exportShiftsToExcel = async () => {
     link.setAttribute("download", "shifts_report.csv");
     document.body.appendChild(link);
     link.click();
-  } catch (error) {
-    alert('Ошибка при экспорте данных: ' + error.message);
-  }
+  };
 };
 
-// Повышение звания
-const promoteUser = async () => {
+const promoteUser  = () => {
   const username = document.getElementById('profileUsername').textContent;
-
-  try {
-    const userDoc = await window.firebaseFunctions.getDoc(window.firebaseFunctions.doc(db, 'users', username));
-    if (userDoc.exists()) {
-      const user = userDoc.data();
-      if (user.role === 'сержант') {
-        user.role = 'старший сержант';
-      } else if (user.role === 'старший сержант') {
-        user.role = 'капитан';
-      } else if (user.role === 'капитан') {
-        user.role = 'админ';
-      } else {
-        alert('Достигнуто максимальное звание!');
-        return;
-      }
-      await window.firebaseFunctions.updateDoc(window.firebaseFunctions.doc(db, 'users', username), user);
+  const transaction = db.transaction(['users'], 'readwrite');
+  const store = transaction.objectStore('users');
+  store.get(username).onsuccess = (event) => {
+    const user = event.target.result;
+    if (user.role === 'сержант') {
+      user.role = 'старший сержант';
+    } else if (user.role === 'старший сержант') {
+      user.role = 'капитан';
+    } else if (user.role === 'капитан') {
+      user.role = 'админ';
+    } else {
+      alert('Достигнуто максимальное звание!');
+      return;
+    }
+    store.put(user).onsuccess = () => {
       alert('Звание повышено!');
-      showProfilePage(username);
-    }
-  } catch (error) {
-    alert('Ошибка при повышении звания: ' + error.message);
-  }
+      showProfilePage(username); // Обновляем страницу профиля
+    };
+  };
 };
 
-// Понижение звания
-const demoteUser = async () => {
+const demoteUser  = () => {
   const username = document.getElementById('profileUsername').textContent;
-
-  try {
-    const userDoc = await window.firebaseFunctions.getDoc(window.firebaseFunctions.doc(db, 'users', username));
-    if (userDoc.exists()) {
-      const user = userDoc.data();
-      if (user.role === 'админ') {
-        user.role = 'капитан';
-      } else if (user.role === 'капитан') {
-        user.role = 'старший сержант';
-      } else if (user.role === 'старший сержант') {
-        user.role = 'сержант';
-      } else {
-        alert('Достигнуто минимальное звание!');
-        return;
-      }
-      await window.firebaseFunctions.updateDoc(window.firebaseFunctions.doc(db, 'users', username), user);
-      alert('Звание понижено!');
-      showProfilePage(username);
+  const transaction = db.transaction(['users'], 'readwrite');
+  const store = transaction.objectStore('users');
+  store.get(username).onsuccess = (event) => {
+    const user = event.target.result;
+    if (user.role === 'админ') {
+      user.role = 'капитан';
+    } else if (user.role === 'капитан') {
+      user.role = 'старший сержант';
+    } else if (user.role === 'старший сержант') {
+      user.role = 'сержант';
+    } else {
+      alert('Достигнуто минимальное звание!');
+      return;
     }
-  } catch (error) {
-    alert('Ошибка при понижении звания: ' + error.message);
-  }
+    store.put(user).onsuccess = () => {
+      alert('Звание понижено!');
+      showProfilePage(username); // Обновляем страницу профиля
+    };
+  };
 };
 
-// Инициализация при загрузке страницы
 window.onload = () => {
-  showAuthPage();
+  initDB();
 };
