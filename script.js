@@ -204,36 +204,36 @@ const deleteGoal = async (id) => {
   }
 };
 
-const saveShift = () => {
+// Сохранение смены
+const saveShift = async () => {
   const fio = document.getElementById('shiftFIO').value.trim();
   const shiftNumber = document.getElementById('shiftNumber').value;
   const shiftDate = document.getElementById('shiftDate').value;
 
   if (!fio || !shiftNumber || !shiftDate) return alert('Заполните все поля!');
 
-  const transaction = db.transaction(['shifts'], 'readwrite');
-  const store = transaction.objectStore('shifts');
-  store.add({ fio, shiftNumber, shiftDate }).onsuccess = () => {
+  try {
+    await window.firebaseFunctions.addDoc(window.firebaseFunctions.collection(db, 'shifts'), {
+      fio,
+      shiftNumber,
+      shiftDate
+    });
     renderShifts();
     resetShiftInputs();
-  };
+  } catch (error) {
+    alert('Ошибка при сохранении смены: ' + error.message);
+  }
 };
 
-const resetShiftInputs = () => {
-  document.getElementById('shiftFIO').value = '';
-  document.getElementById('shiftNumber').value = '';
-  document.getElementById('shiftDate').value = '';
-};
-
-const renderShifts = () => {
+// Отображение смен
+const renderShifts = async () => {
   const shiftList = document.getElementById('shiftList');
   shiftList.innerHTML = '';
 
-  const transaction = db.transaction(['shifts'], 'readonly');
-  const store = transaction.objectStore('shifts');
-  store.getAll().onsuccess = (event) => {
-    const shifts = event.target.result;
-    shifts.forEach((shift) => {
+  try {
+    const querySnapshot = await window.firebaseFunctions.getDocs(window.firebaseFunctions.collection(db, 'shifts'));
+    querySnapshot.forEach((doc) => {
+      const shift = doc.data();
       const shiftRow = document.createElement('tr');
       shiftRow.innerHTML = `
         <td>${shift.fio}</td>
@@ -242,59 +242,30 @@ const renderShifts = () => {
       `;
       shiftList.appendChild(shiftRow);
     });
-  };
+  } catch (error) {
+    alert('Ошибка при загрузке смен: ' + error.message);
+  }
 };
 
-const renderShiftReport = () => {
-  const shiftReportList = document.getElementById('shiftReportList');
-  shiftReportList.innerHTML = '';
-
-  const transaction = db.transaction(['shifts'], 'readonly');
-  const store = transaction.objectStore('shifts');
-  store.getAll().onsuccess = (event) => {
-    const shifts = event.target.result;
-    shifts.forEach((shift) => {
-      const shiftRow = document.createElement('tr');
-      shiftRow.innerHTML = `
-        <td>${shift.fio}</td>
-        <td>${shift.shiftNumber}</td>
-        <td>${shift.shiftDate}</td>
-      `;
-      shiftReportList.appendChild(shiftRow);
+// Очистка данных смен
+const clearShiftData = async () => {
+  try {
+    const querySnapshot = await window.firebaseFunctions.getDocs(window.firebaseFunctions.collection(db, 'shifts'));
+    querySnapshot.forEach(async (doc) => {
+      await window.firebaseFunctions.deleteDoc(window.firebaseFunctions.doc(db, 'shifts', doc.id));
     });
-  };
-};
-
-const clearShiftData = () => {
-  const transaction = db.transaction(['shifts'], 'readwrite');
-  const store = transaction.objectStore('shifts');
-  store.clear().onsuccess = () => {
-    renderShifts(); // Обновляем отображение после очистки
+    renderShifts();
     alert('Данные успешно очищены!');
-  };
+  } catch (error) {
+    alert('Ошибка при очистке данных: ' + error.message);
+  }
 };
 
-const exportToExcel = () => {
-  const transaction = db.transaction(['shifts'], 'readonly');
-  const store = transaction.objectStore('shifts');
-  store.getAll().onsuccess = (event) => {
-    const shifts = event.target.result;
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + shifts.map(shift => `${shift.fio},${shift.shiftNumber},${shift.shiftDate}`).join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "shifts_report.csv");
-    document.body.appendChild(link);
-    link.click();
-  };
-};
-
-const exportShiftsToExcel = () => {
-  const transaction = db.transaction(['shifts'], 'readonly');
-  const store = transaction.objectStore('shifts');
-  store.getAll().onsuccess = (event) => {
-    const shifts = event.target.result;
+// Экспорт смен в Excel
+const exportShiftsToExcel = async () => {
+  try {
+    const querySnapshot = await window.firebaseFunctions.getDocs(window.firebaseFunctions.collection(db, 'shifts'));
+    const shifts = querySnapshot.docs.map(doc => doc.data());
 
     // Создаем CSV контент
     let csvContent = "data:text/csv;charset=utf-8,";
@@ -311,55 +282,66 @@ const exportShiftsToExcel = () => {
     link.setAttribute("download", "shifts_report.csv");
     document.body.appendChild(link);
     link.click();
-  };
+  } catch (error) {
+    alert('Ошибка при экспорте данных: ' + error.message);
+  }
 };
 
-const promoteUser  = () => {
+// Повышение звания
+const promoteUser = async () => {
   const username = document.getElementById('profileUsername').textContent;
-  const transaction = db.transaction(['users'], 'readwrite');
-  const store = transaction.objectStore('users');
-  store.get(username).onsuccess = (event) => {
-    const user = event.target.result;
-    if (user.role === 'сержант') {
-      user.role = 'старший сержант';
-    } else if (user.role === 'старший сержант') {
-      user.role = 'капитан';
-    } else if (user.role === 'капитан') {
-      user.role = 'админ';
-    } else {
-      alert('Достигнуто максимальное звание!');
-      return;
-    }
-    store.put(user).onsuccess = () => {
+
+  try {
+    const userDoc = await window.firebaseFunctions.getDoc(window.firebaseFunctions.doc(db, 'users', username));
+    if (userDoc.exists()) {
+      const user = userDoc.data();
+      if (user.role === 'сержант') {
+        user.role = 'старший сержант';
+      } else if (user.role === 'старший сержант') {
+        user.role = 'капитан';
+      } else if (user.role === 'капитан') {
+        user.role = 'админ';
+      } else {
+        alert('Достигнуто максимальное звание!');
+        return;
+      }
+      await window.firebaseFunctions.updateDoc(window.firebaseFunctions.doc(db, 'users', username), user);
       alert('Звание повышено!');
-      showProfilePage(username); // Обновляем страницу профиля
-    };
-  };
-};
-
-const demoteUser  = () => {
-  const username = document.getElementById('profileUsername').textContent;
-  const transaction = db.transaction(['users'], 'readwrite');
-  const store = transaction.objectStore('users');
-  store.get(username).onsuccess = (event) => {
-    const user = event.target.result;
-    if (user.role === 'админ') {
-      user.role = 'капитан';
-    } else if (user.role === 'капитан') {
-      user.role = 'старший сержант';
-    } else if (user.role === 'старший сержант') {
-      user.role = 'сержант';
-    } else {
-      alert('Достигнуто минимальное звание!');
-      return;
+      showProfilePage(username);
     }
-    store.put(user).onsuccess = () => {
-      alert('Звание понижено!');
-      showProfilePage(username); // Обновляем страницу профиля
-    };
-  };
+  } catch (error) {
+    alert('Ошибка при повышении звания: ' + error.message);
+  }
 };
 
+// Понижение звания
+const demoteUser = async () => {
+  const username = document.getElementById('profileUsername').textContent;
+
+  try {
+    const userDoc = await window.firebaseFunctions.getDoc(window.firebaseFunctions.doc(db, 'users', username));
+    if (userDoc.exists()) {
+      const user = userDoc.data();
+      if (user.role === 'админ') {
+        user.role = 'капитан';
+      } else if (user.role === 'капитан') {
+        user.role = 'старший сержант';
+      } else if (user.role === 'старший сержант') {
+        user.role = 'сержант';
+      } else {
+        alert('Достигнуто минимальное звание!');
+        return;
+      }
+      await window.firebaseFunctions.updateDoc(window.firebaseFunctions.doc(db, 'users', username), user);
+      alert('Звание понижено!');
+      showProfilePage(username);
+    }
+  } catch (error) {
+    alert('Ошибка при понижении звания: ' + error.message);
+  }
+};
+
+// Инициализация при загрузке страницы
 window.onload = () => {
-  initDB();
+  showAuthPage();
 };
