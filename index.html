@@ -50,7 +50,7 @@
       <input type="text" id="topicName" placeholder="Введите имя и фамилию" required>
       <button onclick="createTopic()">Перейти к целям</button>
       <button onclick="showShiftPage()">Отметить выход на смену</button>
-      <button onclick="showProfilePage(currentUser)">Профиль</button>
+      <button onclick="showProfilePage(currentUser )">Профиль</button>
     </div>
 
     <!-- Страница целей -->
@@ -110,64 +110,38 @@
       </table>
     </div>
 
+    <!-- Страница отчета по сменам -->
+    <div id="shiftReportPage" class="shift-report-page hidden">
+      <h1>Отчет по сменам</h1>
+      <table class="shift-report-table">
+        <thead>
+          <tr>
+            <th>ФИО</th>
+            <th>Номер смены</th>
+            <th>Дата</th>
+          </tr>
+        </thead>
+        <tbody id="shiftReportList"></tbody>
+      </table>
+      <button onclick="exportToExcel()">Экспорт в Excel</button>
+      <div class="nav-buttons">
+        <button onclick="showMainPage()">На главную</button>
+      </div>
+    </div>
+
     <!-- Страница профиля -->
     <div id="profilePage" class="profile-page hidden">
       <h1>Профиль пользователя</h1>
       <p>Имя пользователя: <span id="profileUsername"></span></p>
       <p>Должность: <span id="profileRole"></span></p>
       <div class="nav-buttons">
-        <button onclick="promoteUser()">Повысить звание</button>
-        <button onclick="demoteUser()">Понизить звание</button>
+        <button onclick="promoteUser ()">Повысить звание</button>
+        <button onclick="demoteUser ()">Понизить звание</button>
         <button onclick="showMainPage()">Вернуться в меню</button>
       </div>
     </div>
   </div>
 
-  <!-- Firebase SDK -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { 
-      getFirestore, 
-      collection, 
-      addDoc, 
-      getDocs, 
-      doc, 
-      setDoc, 
-      getDoc, 
-      updateDoc, 
-      deleteDoc 
-    } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-
-    // Ваша конфигурация Firebase
-    const firebaseConfig = {
-      apiKey: "AIzaSyDZvL5flUL_M-gOXvwB46yvgdphIKPVGbU",
-      authDomain: "skbkpi.firebaseapp.com",
-      projectId: "skbkpi",
-      storageBucket: "skbkpi.firebasestorage.app",
-      messagingSenderId: "358659206235",
-      appId: "1:358659206235:web:f7da697d5dd25cbe26637e",
-      measurementId: "G-C46GW5CKVV"
-    };
-
-    // Инициализация Firebase
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-
-    // Экспортируем db и функции Firestore для использования в script.js
-    window.db = db;
-    window.firebaseFunctions = { 
-      collection, 
-      addDoc, 
-      getDocs, 
-      doc, 
-      setDoc, 
-      getDoc, 
-      updateDoc, 
-      deleteDoc 
-    };
-  </script>
-
-  <!-- Основной скрипт -->
   <script src="script.js"></script>
 </body>
 </html>
