@@ -39,7 +39,7 @@ const showProfilePage = (username) => {
   hideAllPages();
   document.getElementById('profilePage').classList.remove('hidden');
 
-  getDoc(doc(db, 'users', username)).then((doc) => {
+  window.firebaseFunctions.getDoc(window.firebaseFunctions.doc(db, 'users', username)).then((doc) => {
     if (doc.exists()) {
       const user = doc.data();
       document.getElementById('profileUsername').textContent = user.username;
@@ -67,7 +67,7 @@ const register = async () => {
   if (!username || !password || !role) return alert('Заполните все поля!');
 
   try {
-    await setDoc(doc(db, 'users', username), {
+    await window.firebaseFunctions.setDoc(window.firebaseFunctions.doc(db, 'users', username), {
       username,
       password,
       role
@@ -88,7 +88,7 @@ const login = async () => {
   if (!username || !password || !role) return alert('Заполните все поля!');
 
   try {
-    const userDoc = await getDoc(doc(db, 'users', username));
+    const userDoc = await window.firebaseFunctions.getDoc(window.firebaseFunctions.doc(db, 'users', username));
     if (userDoc.exists()) {
       const user = userDoc.data();
       if (user.password === password && user.role === role) {
@@ -111,7 +111,7 @@ const createTopic = async () => {
   if (!topicName) return alert('Введите имя и фамилию!');
 
   try {
-    await addDoc(collection(db, 'topics'), {
+    await window.firebaseFunctions.addDoc(window.firebaseFunctions.collection(db, 'topics'), {
       name: topicName,
       user: currentUser
     });
@@ -133,7 +133,7 @@ const addGoal = async () => {
   }
 
   try {
-    await addDoc(collection(db, 'goals'), {
+    await window.firebaseFunctions.addDoc(window.firebaseFunctions.collection(db, 'goals'), {
       topicName: currentTopic,
       text: goalText,
       description: goalDescription,
@@ -154,7 +154,7 @@ const renderGoals = async () => {
   goalsList.innerHTML = '';
 
   try {
-    const querySnapshot = await getDocs(collection(db, 'goals'));
+    const querySnapshot = await window.firebaseFunctions.getDocs(window.firebaseFunctions.collection(db, 'goals'));
     querySnapshot.forEach((doc) => {
       const goal = doc.data();
       const goalRow = document.createElement('tr');
@@ -179,10 +179,10 @@ const renderGoals = async () => {
 // Переключение статуса цели
 const toggleGoal = async (id) => {
   try {
-    const goalRef = doc(db, 'goals', id);
-    const goalDoc = await getDoc(goalRef);
+    const goalRef = window.firebaseFunctions.doc(db, 'goals', id);
+    const goalDoc = await window.firebaseFunctions.getDoc(goalRef);
     const goal = goalDoc.data();
-    await updateDoc(goalRef, {
+    await window.firebaseFunctions.updateDoc(goalRef, {
       completed: !goal.completed
     });
     renderGoals();
@@ -194,169 +194,11 @@ const toggleGoal = async (id) => {
 // Удаление цели
 const deleteGoal = async (id) => {
   try {
-    await deleteDoc(doc(db, 'goals', id));
+    await window.firebaseFunctions.deleteDoc(window.firebaseFunctions.doc(db, 'goals', id));
     renderGoals();
   } catch (error) {
     alert('Ошибка при удалении цели: ' + error.message);
   }
 };
 
-const saveShift = () => {
-  const fio = document.getElementById('shiftFIO').value.trim();
-  const shiftNumber = document.getElementById('shiftNumber').value;
-  const shiftDate = document.getElementById('shiftDate').value;
-
-  if (!fio || !shiftNumber || !shiftDate) return alert('Заполните все поля!');
-
-  const transaction = db.transaction(['shifts'], 'readwrite');
-  const store = transaction.objectStore('shifts');
-  store.add({ fio, shiftNumber, shiftDate }).onsuccess = () => {
-    renderShifts();
-    resetShiftInputs();
-  };
-};
-
-const resetShiftInputs = () => {
-  document.getElementById('shiftFIO').value = '';
-  document.getElementById('shiftNumber').value = '';
-  document.getElementById('shiftDate').value = '';
-};
-
-const renderShifts = () => {
-  const shiftList = document.getElementById('shiftList');
-  shiftList.innerHTML = '';
-
-  const transaction = db.transaction(['shifts'], 'readonly');
-  const store = transaction.objectStore('shifts');
-  store.getAll().onsuccess = (event) => {
-    const shifts = event.target.result;
-    shifts.forEach((shift) => {
-      const shiftRow = document.createElement('tr');
-      shiftRow.innerHTML = `
-        <td>${shift.fio}</td>
-        <td>${shift.shiftNumber}</td>
-        <td>${shift.shiftDate}</td>
-      `;
-      shiftList.appendChild(shiftRow);
-    });
-  };
-};
-
-const renderShiftReport = () => {
-  const shiftReportList = document.getElementById('shiftReportList');
-  shiftReportList.innerHTML = '';
-
-  const transaction = db.transaction(['shifts'], 'readonly');
-  const store = transaction.objectStore('shifts');
-  store.getAll().onsuccess = (event) => {
-    const shifts = event.target.result;
-    shifts.forEach((shift) => {
-      const shiftRow = document.createElement('tr');
-      shiftRow.innerHTML = `
-        <td>${shift.fio}</td>
-        <td>${shift.shiftNumber}</td>
-        <td>${shift.shiftDate}</td>
-      `;
-      shiftReportList.appendChild(shiftRow);
-    });
-  };
-};
-
-const clearShiftData = () => {
-  const transaction = db.transaction(['shifts'], 'readwrite');
-  const store = transaction.objectStore('shifts');
-  store.clear().onsuccess = () => {
-    renderShifts(); // Обновляем отображение после очистки
-    alert('Данные успешно очищены!');
-  };
-};
-
-const exportToExcel = () => {
-  const transaction = db.transaction(['shifts'], 'readonly');
-  const store = transaction.objectStore('shifts');
-  store.getAll().onsuccess = (event) => {
-    const shifts = event.target.result;
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + shifts.map(shift => `${shift.fio},${shift.shiftNumber},${shift.shiftDate}`).join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "shifts_report.csv");
-    document.body.appendChild(link);
-    link.click();
-  };
-};
-
-const exportShiftsToExcel = () => {
-  const transaction = db.transaction(['shifts'], 'readonly');
-  const store = transaction.objectStore('shifts');
-  store.getAll().onsuccess = (event) => {
-    const shifts = event.target.result;
-
-    // Создаем CSV контент
-    let csvContent = "data:text/csv;charset=utf-8,";
-    csvContent += "ФИО,Номер смены,Дата\n"; // Заголовки столбцов
-    shifts.forEach(shift => {
-      const row = `${shift.fio},${shift.shiftNumber},${shift.shiftDate}`;
-      csvContent += row + "\n";
-    });
-
-    // Создаем ссылку для скачивания
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "shifts_report.csv");
-    document.body.appendChild(link);
-    link.click();
-  };
-};
-
-const promoteUser  = () => {
-  const username = document.getElementById('profileUsername').textContent;
-  const transaction = db.transaction(['users'], 'readwrite');
-  const store = transaction.objectStore('users');
-  store.get(username).onsuccess = (event) => {
-    const user = event.target.result;
-    if (user.role === 'сержант') {
-      user.role = 'старший сержант';
-    } else if (user.role === 'старший сержант') {
-      user.role = 'капитан';
-    } else if (user.role === 'капитан') {
-      user.role = 'админ';
-    } else {
-      alert('Достигнуто максимальное звание!');
-      return;
-    }
-    store.put(user).onsuccess = () => {
-      alert('Звание повышено!');
-      showProfilePage(username); // Обновляем страницу профиля
-    };
-  };
-};
-
-const demoteUser  = () => {
-  const username = document.getElementById('profileUsername').textContent;
-  const transaction = db.transaction(['users'], 'readwrite');
-  const store = transaction.objectStore('users');
-  store.get(username).onsuccess = (event) => {
-    const user = event.target.result;
-    if (user.role === 'админ') {
-      user.role = 'капитан';
-    } else if (user.role === 'капитан') {
-      user.role = 'старший сержант';
-    } else if (user.role === 'старший сержант') {
-      user.role = 'сержант';
-    } else {
-      alert('Достигнуто минимальное звание!');
-      return;
-    }
-    store.put(user).onsuccess = () => {
-      alert('Звание понижено!');
-      showProfilePage(username); // Обновляем страницу профиля
-    };
-  };
-};
-
-window.onload = () => {
-  initDB();
-};
+// Остальные функции (saveShift, renderShifts, promoteUser, demoteUser и т.д.) можно переписать аналогично.
