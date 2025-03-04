@@ -126,7 +126,17 @@
   <!-- Firebase SDK -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getFirestore, collection, addDoc, getDocs, doc, setDoc, getDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { 
+      getFirestore, 
+      collection, 
+      addDoc, 
+      getDocs, 
+      doc, 
+      setDoc, 
+      getDoc, 
+      updateDoc, 
+      deleteDoc 
+    } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
     // Ваша конфигурация Firebase
     const firebaseConfig = {
@@ -145,7 +155,16 @@
 
     // Экспортируем db и функции Firestore для использования в script.js
     window.db = db;
-    window.firebaseFunctions = { collection, addDoc, getDocs, doc, setDoc, getDoc, updateDoc, deleteDoc };
+    window.firebaseFunctions = { 
+      collection, 
+      addDoc, 
+      getDocs, 
+      doc, 
+      setDoc, 
+      getDoc, 
+      updateDoc, 
+      deleteDoc 
+    };
   </script>
 
   <!-- Основной скрипт -->
