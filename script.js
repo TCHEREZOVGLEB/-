@@ -1,60 +1,25 @@
-const config = {
-  artifactId: 2684317095,
-  pagesBuildVersion: "7be2261fe1099c0c789fb885a0f26c42a8184732",
-  oidcToken: "***"
-};
+let currentUser = null;
+let currentTopic = null;
 
-let currentTopic = null; 
-
-let currentUser  = null;
-let db;
-
-const initDB = () => {
-  const request = indexedDB.open('GoalsTrackerDB', 4);
-
-  request.onupgradeneeded = (event) => {
-    db = event.target.result;
-    if (!db.objectStoreNames.contains('users')) {
-      db.createObjectStore('users', { keyPath: 'username' });
-    }
-    if (!db.objectStoreNames.contains('topics')) {
-      db.createObjectStore('topics', { keyPath: 'name' });
-    }
-    if (!db.objectStoreNames.contains('goals')) {
-      const goalsStore = db.createObjectStore('goals', { keyPath: 'id', autoIncrement: true });
-      goalsStore.createIndex('topicName', 'topicName', { unique: false });
-    }
-    if (!db.objectStoreNames.contains('shifts')) {
-      const shiftsStore = db.createObjectStore('shifts', { keyPath: 'id', autoIncrement: true });
-      shiftsStore.createIndex('fio', 'fio', { unique: false });
-    }
-  };
-
-  request.onsuccess = (event) => {
-    db = event.target.result;
-    showAuthPage(); // Показываем страницу авторизации по умолчанию
-  };
-
-  request.onerror = (event) => {
-    console.error('Ошибка при открытии базы данных:', event.target.error);
-  };
-};
-
+// Показать страницу авторизации
 const showAuthPage = () => {
   hideAllPages();
   document.getElementById('authPage').classList.remove('hidden');
 };
 
+// Показать страницу регистрации
 const showRegisterPage = () => {
   hideAllPages();
   document.getElementById('registerPage').classList.remove('hidden');
 };
 
+// Показать основную страницу
 const showMainPage = () => {
   hideAllPages();
   document.getElementById('mainPage').classList.remove('hidden');
 };
 
+// Показать страницу целей
 const showTopicPage = (topicName) => {
   hideAllPages();
   document.getElementById('topicPage').classList.remove('hidden');
@@ -62,100 +27,102 @@ const showTopicPage = (topicName) => {
   renderGoals();
 };
 
+// Показать страницу смен
 const showShiftPage = () => {
   hideAllPages();
   document.getElementById('shiftPage').classList.remove('hidden');
   renderShifts();
 };
 
-const showShiftReportPage = () => {
-  hideAllPages();
-  document.getElementById('shiftReportPage').classList.remove('hidden');
-  renderShiftReport();
-};
-
+// Показать страницу профиля
 const showProfilePage = (username) => {
   hideAllPages();
   document.getElementById('profilePage').classList.remove('hidden');
 
-  const transaction = db.transaction(['users'], 'readonly');
-  const store = transaction.objectStore('users');
-  store.get(username).onsuccess = (event) => {
-    const user = event.target.result;
-    document.getElementById('profileUsername').textContent = user.username;
-    document.getElementById('profileRole').textContent = user.role;
-
-    // Проверяем роль текущего пользователя
-    if (currentUser  && (user.role === 'капитан' || user.role === 'админ')) {
-      document.querySelector('#profilePage button:nth-child(1)').style.display = 'inline-block'; // Кнопка повышения
-      document.querySelector('#profilePage button:nth-child(2)').style.display = 'inline-block'; // Кнопка понижения
-    } else {
-      document.querySelector('#profilePage button:nth-child(1)').style.display = 'none'; // Скрыть кнопку повышения
-      document.querySelector('#profilePage button:nth-child(2)').style.display = 'none'; // Скрыть кнопку понижения
+  getDoc(doc(db, 'users', username)).then((doc) => {
+    if (doc.exists()) {
+      const user = doc.data();
+      document.getElementById('profileUsername').textContent = user.username;
+      document.getElementById('profileRole').textContent = user.role;
     }
-  };
+  });
 };
 
+// Скрыть все страницы
 const hideAllPages = () => {
   document.getElementById('authPage').classList.add('hidden');
   document.getElementById('registerPage').classList.add('hidden');
   document.getElementById('mainPage').classList.add('hidden');
   document.getElementById('topicPage').classList.add('hidden');
   document.getElementById('shiftPage').classList.add('hidden');
-  document.getElementById('shiftReportPage').classList.add('hidden');
   document.getElementById('profilePage').classList.add('hidden');
 };
 
-const register = () => {
+// Регистрация пользователя
+const register = async () => {
   const username = document.getElementById('regUsername').value.trim();
   const password = document.getElementById('regPassword').value.trim();
   const role = document.getElementById('regRole').value;
 
   if (!username || !password || !role) return alert('Заполните все поля!');
 
-  const transaction = db.transaction(['users'], 'readwrite');
-  const store = transaction.objectStore('users');
-  store.add({ username, password, role }).onsuccess = () => {
+  try {
+    await setDoc(doc(db, 'users', username), {
+      username,
+      password,
+      role
+    });
     alert('Регистрация успешна!');
-    showAuthPage(); // Переход на страницу авторизации после регистрации
-  };
-
-  transaction.onerror = () => {
-    alert('Пользователь уже существует!');
-  };
+    showAuthPage();
+  } catch (error) {
+    alert('Ошибка при регистрации: ' + error.message);
+  }
 };
 
-const login = () => {
+// Авторизация пользователя
+const login = async () => {
   const username = document.getElementById('loginUsername').value.trim();
   const password = document.getElementById('loginPassword').value.trim();
   const role = document.getElementById('loginRole').value;
 
   if (!username || !password || !role) return alert('Заполните все поля!');
 
-  const transaction = db.transaction(['users'], 'readonly');
-  const store = transaction.objectStore('users');
-  store.get(username).onsuccess = (event) => {
-    const user = event.target.result;
-    if (user && user.password === password && user.role === role) {
-      currentUser  = username;
-      showMainPage(); // Переход на основную страницу после авторизации
+  try {
+    const userDoc = await getDoc(doc(db, 'users', username));
+    if (userDoc.exists()) {
+      const user = userDoc.data();
+      if (user.password === password && user.role === role) {
+        currentUser = username;
+        showMainPage();
+      } else {
+        alert('Неверное имя пользователя, пароль или должность!');
+      }
     } else {
-      alert('Неверное имя пользователя, пароль или должность!');
+      alert('Пользователь не найден!');
     }
-  };
+  } catch (error) {
+    alert('Ошибка при авторизации: ' + error.message);
+  }
 };
 
-const createTopic = () => {
+// Создание темы
+const createTopic = async () => {
   const topicName = document.getElementById('topicName').value.trim();
   if (!topicName) return alert('Введите имя и фамилию!');
 
-  const transaction = db.transaction(['topics'], 'readwrite');
-  const store = transaction.objectStore('topics');
-  store.add({ name: topicName, user: currentUser  });
-  showTopicPage(topicName);
+  try {
+    await addDoc(collection(db, 'topics'), {
+      name: topicName,
+      user: currentUser
+    });
+    showTopicPage(topicName);
+  } catch (error) {
+    alert('Ошибка при создании темы: ' + error.message);
+  }
 };
 
-const addGoal = () => {
+// Добавление цели
+const addGoal = async () => {
   const goalText = document.getElementById('newGoal').value.trim();
   const goalDescription = document.getElementById('goalDescription').value.trim();
   const goalProgress = parseInt(document.getElementById('newGoalProgress').value, 10);
@@ -165,67 +132,73 @@ const addGoal = () => {
     return alert('Введите процент выполнения от 0 до 100!');
   }
 
-  const transaction = db.transaction(['goals'], 'readwrite');
-  const store = transaction.objectStore('goals');
-  store.add({
-    topicName: currentTopic,
-    text: goalText,
-    description: goalDescription,
-    progress: goalProgress,
-    completed: false,
-    createdBy: currentUser  // Add this line
-  }).onsuccess = () => {
+  try {
+    await addDoc(collection(db, 'goals'), {
+      topicName: currentTopic,
+      text: goalText,
+      description: goalDescription,
+      progress: goalProgress,
+      completed: false,
+      createdBy: currentUser
+    });
     renderGoals();
     resetGoalInputs();
-  };
+  } catch (error) {
+    alert('Ошибка при добавлении цели: ' + error.message);
+  }
 };
 
-const resetGoalInputs = () => {
-  document.getElementById('newGoal').value = '';
-  document.getElementById('goalDescription').value = '';
-  document.getElementById('newGoalProgress').value = '';
-};
-
-const renderGoals = () => {
+// Отображение целей
+const renderGoals = async () => {
   const goalsList = document.getElementById('goalsList');
   goalsList.innerHTML = '';
 
-  const transaction = db.transaction(['goals'], 'readonly');
-  const store = transaction.objectStore('goals');
-  store.getAll().onsuccess = (event) => {
-    const goals = event.target.result;
-    goals.forEach((goal) => {
+  try {
+    const querySnapshot = await getDocs(collection(db, 'goals'));
+    querySnapshot.forEach((doc) => {
+      const goal = doc.data();
       const goalRow = document.createElement('tr');
       goalRow.className = `goal ${goal.completed ? 'completed' : ''}`;
       goalRow.innerHTML = `
         <td>${goal.text}</td>
         <td>${goal.description}</td>
         <td>${goal.progress}%</td>
-        <td>Создано пользователем: ${goal.createdBy}</td>  // Add this line
+        <td>Создано пользователем: ${goal.createdBy}</td>
         <td>
-          <button onclick="toggleGoal(${goal.id})">${goal.completed ? 'Восстановить' : 'Закрыть'}</button>
-          <button onclick="deleteGoal(${goal.id})">Удалить</button>
+          <button onclick="toggleGoal('${doc.id}')">${goal.completed ? 'Восстановить' : 'Закрыть'}</button>
+          <button onclick="deleteGoal('${doc.id}')">Удалить</button>
         </td>
       `;
       goalsList.appendChild(goalRow);
     });
-  };
+  } catch (error) {
+    alert('Ошибка при загрузке целей: ' + error.message);
+  }
 };
 
-const toggleGoal = (id) => {
-  const transaction = db.transaction(['goals'], 'readwrite');
-  const store = transaction.objectStore('goals');
-  store.get(id).onsuccess = (event) => {
-    const goal = event.target.result;
-    goal.completed = !goal.completed;
-    store.put(goal).onsuccess = renderGoals;
-  };
+// Переключение статуса цели
+const toggleGoal = async (id) => {
+  try {
+    const goalRef = doc(db, 'goals', id);
+    const goalDoc = await getDoc(goalRef);
+    const goal = goalDoc.data();
+    await updateDoc(goalRef, {
+      completed: !goal.completed
+    });
+    renderGoals();
+  } catch (error) {
+    alert('Ошибка при обновлении цели: ' + error.message);
+  }
 };
 
-const deleteGoal = (id) => {
-  const transaction = db.transaction(['goals'], 'readwrite');
-  const store = transaction.objectStore('goals');
-  store.delete(id).onsuccess = renderGoals;
+// Удаление цели
+const deleteGoal = async (id) => {
+  try {
+    await deleteDoc(doc(db, 'goals', id));
+    renderGoals();
+  } catch (error) {
+    alert('Ошибка при удалении цели: ' + error.message);
+  }
 };
 
 const saveShift = () => {
