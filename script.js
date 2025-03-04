@@ -24,6 +24,7 @@ const showTopicPage = (topicName) => {
   hideAllPages();
   document.getElementById('topicPage').classList.remove('hidden');
   document.getElementById('topicTitle').textContent = topicName;
+  currentTopic = topicName; // Обновляем текущую тему
   renderGoals();
 };
 
@@ -157,19 +158,21 @@ const renderGoals = async () => {
     const querySnapshot = await window.firebaseFunctions.getDocs(window.firebaseFunctions.collection(db, 'goals'));
     querySnapshot.forEach((doc) => {
       const goal = doc.data();
-      const goalRow = document.createElement('tr');
-      goalRow.className = `goal ${goal.completed ? 'completed' : ''}`;
-      goalRow.innerHTML = `
-        <td>${goal.text}</td>
-        <td>${goal.description}</td>
-        <td>${goal.progress}%</td>
-        <td>Создано пользователем: ${goal.createdBy}</td>
-        <td>
-          <button onclick="toggleGoal('${doc.id}')">${goal.completed ? 'Восстановить' : 'Закрыть'}</button>
-          <button onclick="deleteGoal('${doc.id}')">Удалить</button>
-        </td>
-      `;
-      goalsList.appendChild(goalRow);
+      if (goal.topicName === currentTopic) { // Фильтруем цели по текущей теме
+        const goalRow = document.createElement('tr');
+        goalRow.className = `goal ${goal.completed ? 'completed' : ''}`;
+        goalRow.innerHTML = `
+          <td>${goal.text}</td>
+          <td>${goal.description}</td>
+          <td>${goal.progress}%</td>
+          <td>Создано пользователем: ${goal.createdBy}</td>
+          <td>
+            <button onclick="toggleGoal('${doc.id}')">${goal.completed ? 'Восстановить' : 'Закрыть'}</button>
+            <button onclick="deleteGoal('${doc.id}')">Удалить</button>
+          </td>
+        `;
+        goalsList.appendChild(goalRow);
+      }
     });
   } catch (error) {
     alert('Ошибка при загрузке целей: ' + error.message);
@@ -201,4 +204,162 @@ const deleteGoal = async (id) => {
   }
 };
 
-// Остальные функции (saveShift, renderShifts, promoteUser, demoteUser и т.д.) можно переписать аналогично.
+const saveShift = () => {
+  const fio = document.getElementById('shiftFIO').value.trim();
+  const shiftNumber = document.getElementById('shiftNumber').value;
+  const shiftDate = document.getElementById('shiftDate').value;
+
+  if (!fio || !shiftNumber || !shiftDate) return alert('Заполните все поля!');
+
+  const transaction = db.transaction(['shifts'], 'readwrite');
+  const store = transaction.objectStore('shifts');
+  store.add({ fio, shiftNumber, shiftDate }).onsuccess = () => {
+    renderShifts();
+    resetShiftInputs();
+  };
+};
+
+const resetShiftInputs = () => {
+  document.getElementById('shiftFIO').value = '';
+  document.getElementById('shiftNumber').value = '';
+  document.getElementById('shiftDate').value = '';
+};
+
+const renderShifts = () => {
+  const shiftList = document.getElementById('shiftList');
+  shiftList.innerHTML = '';
+
+  const transaction = db.transaction(['shifts'], 'readonly');
+  const store = transaction.objectStore('shifts');
+  store.getAll().onsuccess = (event) => {
+    const shifts = event.target.result;
+    shifts.forEach((shift) => {
+      const shiftRow = document.createElement('tr');
+      shiftRow.innerHTML = `
+        <td>${shift.fio}</td>
+        <td>${shift.shiftNumber}</td>
+        <td>${shift.shiftDate}</td>
+      `;
+      shiftList.appendChild(shiftRow);
+    });
+  };
+};
+
+const renderShiftReport = () => {
+  const shiftReportList = document.getElementById('shiftReportList');
+  shiftReportList.innerHTML = '';
+
+  const transaction = db.transaction(['shifts'], 'readonly');
+  const store = transaction.objectStore('shifts');
+  store.getAll().onsuccess = (event) => {
+    const shifts = event.target.result;
+    shifts.forEach((shift) => {
+      const shiftRow = document.createElement('tr');
+      shiftRow.innerHTML = `
+        <td>${shift.fio}</td>
+        <td>${shift.shiftNumber}</td>
+        <td>${shift.shiftDate}</td>
+      `;
+      shiftReportList.appendChild(shiftRow);
+    });
+  };
+};
+
+const clearShiftData = () => {
+  const transaction = db.transaction(['shifts'], 'readwrite');
+  const store = transaction.objectStore('shifts');
+  store.clear().onsuccess = () => {
+    renderShifts(); // Обновляем отображение после очистки
+    alert('Данные успешно очищены!');
+  };
+};
+
+const exportToExcel = () => {
+  const transaction = db.transaction(['shifts'], 'readonly');
+  const store = transaction.objectStore('shifts');
+  store.getAll().onsuccess = (event) => {
+    const shifts = event.target.result;
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + shifts.map(shift => `${shift.fio},${shift.shiftNumber},${shift.shiftDate}`).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "shifts_report.csv");
+    document.body.appendChild(link);
+    link.click();
+  };
+};
+
+const exportShiftsToExcel = () => {
+  const transaction = db.transaction(['shifts'], 'readonly');
+  const store = transaction.objectStore('shifts');
+  store.getAll().onsuccess = (event) => {
+    const shifts = event.target.result;
+
+    // Создаем CSV контент
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += "ФИО,Номер смены,Дата\n"; // Заголовки столбцов
+    shifts.forEach(shift => {
+      const row = `${shift.fio},${shift.shiftNumber},${shift.shiftDate}`;
+      csvContent += row + "\n";
+    });
+
+    // Создаем ссылку для скачивания
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "shifts_report.csv");
+    document.body.appendChild(link);
+    link.click();
+  };
+};
+
+const promoteUser  = () => {
+  const username = document.getElementById('profileUsername').textContent;
+  const transaction = db.transaction(['users'], 'readwrite');
+  const store = transaction.objectStore('users');
+  store.get(username).onsuccess = (event) => {
+    const user = event.target.result;
+    if (user.role === 'сержант') {
+      user.role = 'старший сержант';
+    } else if (user.role === 'старший сержант') {
+      user.role = 'капитан';
+    } else if (user.role === 'капитан') {
+      user.role = 'админ';
+    } else {
+      alert('Достигнуто максимальное звание!');
+      return;
+    }
+    store.put(user).onsuccess = () => {
+      alert('Звание повышено!');
+      showProfilePage(username); // Обновляем страницу профиля
+    };
+  };
+};
+
+const demoteUser  = () => {
+  const username = document.getElementById('profileUsername').textContent;
+  const transaction = db.transaction(['users'], 'readwrite');
+  const store = transaction.objectStore('users');
+  store.get(username).onsuccess = (event) => {
+    const user = event.target.result;
+    if (user.role === 'админ') {
+      user.role = 'капитан';
+    } else if (user.role === 'капитан') {
+      user.role = 'старший сержант';
+    } else if (user.role === 'старший сержант') {
+      user.role = 'сержант';
+    } else {
+      alert('Достигнуто минимальное звание!');
+      return;
+    }
+    store.put(user).onsuccess = () => {
+      alert('Звание понижено!');
+      showProfilePage(username); // Обновляем страницу профиля
+    };
+  };
+};
+
+window.onload = () => {
+  initDB();
+};
